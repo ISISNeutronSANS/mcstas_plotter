@@ -1,0 +1,20 @@
+# Format: McCode with text headers
+# URL: http://www.mccode.org
+# Creator: McStas 3.4 - synthetic example
+# Instrument: Example_SANS.instr
+# Ncount: 10000000
+# Trace: no
+# Gravitation: no
+# Seed: 1234
+# Directory: example_data
+# Param: lambda_min=0.9
+# Param: lambda_max=13
+# type: array_2d(4, 4)
+# component: psd
+# xvar: X
+# yvar: Y
+# Data [psd/psd.dat] I:
+1 1 1 1
+1 1 1 1
+1 1 1 1
+1 1 1 1
