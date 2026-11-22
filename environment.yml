@@ -1,0 +1,12 @@
+# Conda environment for the McStas 1D Monitor Plotter.
+# Uses conda-forge only (no Anaconda 'defaults' channel, which needs a
+# commercial licence for large organisations).
+name: mcstas-plotter
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python>=3.10,<3.14
+  - numpy>=1.23
+  - matplotlib>=3.7
+  - pyside6>=6.5
