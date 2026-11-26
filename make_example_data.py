@@ -1,8 +1,15 @@
 #!/usr/bin/env python
-"""Generate a small set of synthetic McStas-format output files for testing
-the plotter:  python make_example_data.py [output_folder]"""
+"""Generate synthetic McStas-format output for testing the plotter:
+
+    python make_example_data.py [output_folder]
+
+Writes two "simulations" to compare: sim_A (60 K moderator spectrum) and
+sim_B (40 K), each a 4-point scan plus single monitors. sim_B also has a
+finer-binned wavelength monitor that deliberately does NOT match sim_A's
+binning, to show the x-axis check in Data operations."""
 
 import sys
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +29,7 @@ SIM_HEADER = """# Format: McCode with text headers
 
 
 def write_1d(path, comp, title, xvar, xlabel, xlim, x, y, var_name="I"):
-    rng = np.random.default_rng(abs(hash(str(path))) % 2**32)
+    rng = np.random.default_rng(zlib.crc32(str(path).encode()))
     n = np.maximum(np.round(y / y.max() * 5000), 0)
     err = np.where(n > 0, y / np.sqrt(np.maximum(n, 1)), 0.0)
     y_noisy = np.maximum(y + rng.normal(0, 1, y.size) * err, 0)
@@ -57,31 +64,37 @@ def maxwell(lam, T=60.0, lmin=0.9):
     return 1e3 * s * (lam > lmin)
 
 
-def make(out: Path):
+def make(out: Path, T: float = 60.0, extra: bool = False):
     L = 25.0  # m, moderator-detector distance
     for i, lmin in enumerate([0.9, 1.75, 3.0, 4.5]):
         d = out / "scan" / str(i)
         lam = np.linspace(0.5, 15, 100)
         write_1d(d / "lambda_mon.L", "lam_mon", "Wavelength monitor", "L",
                  "Wavelength [AA]", (0.5, 15, lmin, 24.9), lam,
-                 maxwell(lam, lmin=lmin) + 1e-3)
+                 maxwell(lam, T=T, lmin=lmin) + 1e-3)
         t = np.linspace(0, 100000, 200)   # microseconds
         lam_t = t / (252.78 * L)
         write_1d(d / "tof_mon.t", "tof_mon", "Time-of-flight monitor", "t",
                  "Time-of-flight [\\gms]", (0, 100000, lmin, 25.0), t,
-                 np.nan_to_num(maxwell(np.maximum(lam_t, 1e-3), lmin=lmin)))
+                 np.nan_to_num(maxwell(np.maximum(lam_t, 1e-3), T=T, lmin=lmin)))
 
     # Monitor_nD-style TOF output (time in seconds) in the top-level folder
     t_s = np.linspace(0, 0.1, 150)
     lam_t = t_s * 1e6 / (252.78 * 12.0)
     write_1d(out / "Mon_nD_tof_1795262400.t", "MonND", "Monitor_nD TOF",
              "t", "TOF [s]", (0, 0.1, 0.9, 12.0), t_s,
-             maxwell(np.maximum(lam_t, 1e-3)))
+             maxwell(np.maximum(lam_t, 1e-3), T=T))
     # An energy monitor (shows up as 'Other 1D')
     E = np.linspace(0, 50, 80)
     write_1d(out / "energy.E", "E_mon", "Energy monitor", "E",
              "Energy [meV]", (0, 50, 0.9, 10.0), E,
              E * np.exp(-E / 5.0) + 1e-3)
+
+    if extra:
+        lam = np.linspace(0.5, 15, 200)
+        write_1d(out / "lambda_fine.L", "lam_fine", "Fine wavelength monitor",
+                 "L", "Wavelength [AA]", (0.5, 15, 0.9, 24.95), lam,
+                 maxwell(lam, T=T) + 1e-3)
 
     # A 2D PSD file - must be ignored by the plotter
     psd = out / "psd.dat"
@@ -92,8 +105,10 @@ def make(out: Path):
                                for _ in range(4)) + "\n")
     # McStas also writes mccode.sim - must be ignored
     (out / "mccode.sim").write_text("begin instrument: Example_SANS\nend\n")
-    print(f"Example data written to {out.resolve()}")
 
 
 if __name__ == "__main__":
-    make(Path(sys.argv[1] if len(sys.argv) > 1 else "example_data"))
+    root = Path(sys.argv[1] if len(sys.argv) > 1 else "example_data")
+    make(root / "sim_A", T=60.0)
+    make(root / "sim_B", T=40.0, extra=True)
+    print(f"Example data written to {root.resolve()} (sim_A, sim_B)")

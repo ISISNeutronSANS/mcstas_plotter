@@ -1,9 +1,20 @@
 # McStas 1D Monitor Plotter
 
-A desktop application (Qt/PySide6 + matplotlib) to browse and plot the text
-output files written by McStas/McCode **1D monitors**: time-of-flight
-(`TOF_monitor`, `Monitor_nD` with `t`), wavelength (`L_monitor`,
-`Monitor_nD` with `lambda`) and any other 1D monitor (energy, position, …).
+A desktop application (Qt/PySide6 + matplotlib) to browse, compare,
+combine and plot the text output files written by McStas/McCode
+**1D monitors**: time-of-flight (`TOF_monitor`, `Monitor_nD` with `t`),
+wavelength (`L_monitor`, `Monitor_nD` with `lambda`) and any other 1D
+monitor (energy, position, …).
+
+**New in 1.1**
+* You can load several data folders (A, B, C…) at once to compare
+  simulations.
+* Data operations: A + B, A − B, A × B and A ÷ B between datasets, and
+  offsetting or scaling by a constant. Uncertainties are propagated.
+* Results go into a *Derived data* list, where they can be plotted like
+  any other data and used in further operations.
+* Any dataset can be saved in McStas 1D format or as 3-column
+  `x y y_err` text.
 
 ## Contents
 
@@ -14,7 +25,7 @@ output files written by McStas/McCode **1D monitors**: time-of-flight
 | `install.sh` | Installer for Linux / macOS |
 | `install.bat` | Installer for Windows |
 | `make_example_data.py` | Writes synthetic McStas files for testing |
-| `example_data/` | Example output: a 4-point scan, a Monitor_nD file, an energy monitor, plus a 2D file and `mccode.sim` that are (correctly) ignored |
+| `example_data/` | Two example "simulations", `sim_A` (60 K moderator) and `sim_B` (40 K). Each has a 4-point scan, a Monitor_nD file and an energy monitor, plus a 2D file and `mccode.sim` that are (correctly) ignored. `sim_B` also has a 200-bin wavelength monitor that does not match `sim_A`'s 100 bins, to demonstrate the x-axis check. |
 
 ---
 
@@ -82,34 +93,47 @@ To uninstall: `conda env remove -n mcstas-plotter`, then delete the folder.
 ```bash
 ./run_plotter.sh                       # Linux/macOS
 ./run_plotter.sh /data/sims/larmor_run # open a folder directly
+./run_plotter.sh /data/runA /data/runB # open two folders to compare
 run_plotter.bat                        # Windows (or double-click it)
 ```
-To try it out, open `example_data` and tick **Include subfolders**.
+To try it out, run
+`./run_plotter.sh example_data/sim_A example_data/sim_B`.
 
-The last folder you used and the *Include subfolders* setting are remembered
+The loaded folders and the *Include subfolders* setting are remembered
 between sessions.
 
 ---
 
 ## Using the application
 
-**Left panel – files**
-* **Browse… / Ctrl+O** selects a data folder. You can also type a path and
-  press Enter. **Refresh / F5** re-scans it, e.g. while a simulation is still
-  running.
+**Folders**
+* **Open folder… (Ctrl+O)** loads one folder and replaces any folders
+  already loaded.
+* **Add folder… (Ctrl+Shift+O)** loads another folder alongside the
+  current ones, e.g. a second simulation to compare. Each folder gets a
+  tag (A, B, C, …), shown in the **Set** column.
+* When more than one folder is loaded, files are labelled `A:scan/0/tof_mon.t`,
+  `B:scan/0/tof_mon.t` and so on. The same labels are used in legends and
+  data operations.
+* **Remove** drops the folder currently shown in the drop-down.
+* **Refresh / F5** re-scans all folders, e.g. while a simulation is
+  still running.
 * **Include subfolders** also searches sub-directories, such as the
   numbered point folders `0/ 1/ 2/ …` of a McStas scan (`-N` option).
 * Every file is checked by its header, not its extension. Any file
   with `# type: array_1d(N)` is listed. 2D monitors, `mccode.sim`,
   `mccode.dat` scan summaries and non-McStas files are ignored.
-* Columns: file (relative path), **type** (TOF / Wavelength / Other 1D,
+**Left panel – Files tab**
+* Columns: set (folder tag), file (relative path), **type** (TOF / Wavelength / Other 1D,
   worked out from `xvar`, `xlabel` and `title`), component, number of
   bins, x-axis label and title. Click a header to sort.
-* The **Show** check-boxes filter by type. The text box filters by file
-  name, component, title or scan parameter, e.g. `tof 3/`.
-* Selecting a file shows its full header in **File header**. Hover over a
+* The **Show** check-boxes filter by type. The text box filters by folder
+  tag, file name, component, title or scan parameter, e.g. `B: tof` or
+  `tof 3/`.
+* Selecting a file shows its full header in **Details**. Hover over a
   row to see its full path and scan parameters.
-* Select one or more files (Ctrl/Shift-click), then:
+* Select one or more files (Ctrl/Shift-click). The buttons below the list
+  act on whatever is selected in the active tab, Files or Derived data:
   * **Plot in new figure** (Ctrl+N) opens a new figure tab. An empty
     current figure is reused.
   * **Overplot on current** (Ctrl+Shift+N, or double-click a file) adds
@@ -117,6 +141,68 @@ between sessions.
     TOF and wavelength data.
   * **Error bars** sets whether the curves you are adding get error bars,
     so one figure can hold curves with and without them.
+  * **Data operations… (Ctrl+M)** opens the operations dialog (see below).
+  * **Save data…** writes the selected dataset(s) to disk (see below).
+
+**Data operations**
+
+Click **Data operations…** or press Ctrl+M. The first two datasets
+selected in the list are pre-filled as A and B.
+
+| Operation | with dataset B | with a constant c |
+|---|---|---|
+| + | y = a + b,  σ = √(σa² + σb²) | offset: y = a + c, σ = σa |
+| − | y = a − b,  σ = √(σa² + σb²) | y = a − c, σ = σa |
+| × | y = a·b,  σ = √((b σa)² + (a σb)²) | **scale**: y = c·a, σ = \|c\| σa |
+| ÷ | y = a/b,  σ = \|y\|·√((σa/a)² + (σb/b)²) | y = a/c, σ = σa/\|c\| |
+
+* **Compatibility check.** Datasets can only be combined if they
+  have the **same number of points** and their **x values agree to
+  better than 0.1 %** point by point.
+  * Deviation is measured as |xa − xb| / max(|xa|, |xb|).
+  * For points close to x = 0, the full x range is used as the reference
+    instead.
+  * The dialog shows the result live, and **Create** is disabled with
+    the reason if the check fails.
+  * You are also warned if the x-axis labels differ (e.g. µs vs s), or
+    if B has zeros when dividing. Points where B is zero become NaN and
+    show as gaps in the plot.
+* **Assumptions.** Errors assume A and B are uncorrelated (independent
+  simulations), and constants are treated as exact. The result takes
+  A's x values and A's x label. The y label becomes *Ratio* or
+  *Product* for ÷ and × of two datasets.
+* **Naming.** The result is named automatically from the expression,
+  e.g. `(A:scan/0/lambda_mon.L) ÷ (B:scan/0/lambda_mon.L)`. You can type
+  your own name in the dialog.
+* **After creating.** Choose *Plot in new figure*, *Overplot on current
+  figure* or *Don't plot*. The dialog stays open, so you can chain
+  operations, e.g. divide and then scale the result.
+
+**Left panel – Derived data tab**
+* Lists every result of the operations dialog. Selecting one shows its
+  operation, its operands and their source files in **Details**.
+* Derived datasets can be plotted, overplotted (double-click works too),
+  used as A or B in further operations, saved, renamed or deleted.
+* They exist only for the current session, so **save the ones you want
+  to keep**.
+
+**Saving data**
+
+Select one or more datasets, either files or derived data, and click
+**Save data…**. With one dataset you choose the file name and format.
+With several you choose a format and a folder, and file names come from
+the dataset names. Two formats are available:
+* **McStas 1D format (`.dat`).** This is the standard McCode text header
+  plus `x I I_err N` columns. It includes `xvar`/`xlabel`, statistics and
+  a `# Derived:` line recording the operation. The file can be read by
+  McStas tools (mcplot) and by this program: add its folder and it
+  appears in the file list.
+* **3-column text (`.txt`).** This is `x y y_err`, with a short `#`
+  comment header giving the name, source and axis labels. It can be read
+  directly by `numpy.loadtxt`, gnuplot, Excel and so on.
+
+Headers are written in plain ASCII (Å → AA, ÷ → /, …) for portability.
+Undefined points are written as `nan`.
 
 **Centre – figures**
 * Each figure is a tab. Use **+** for an empty one and **×** to close.
